@@ -16,6 +16,7 @@ import time
 import webbrowser
 import urllib.request
 import urllib.error
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime
 import tkinter as tk
@@ -40,8 +41,8 @@ try:
                         generate_backup_report, select_retry_devices,
                         DEFAULT_RETRY_DELAY)
     from version import (APP_NAME, APP_VERSION, APP_AUTHOR, GITHUB_URL,
-                         GITHUB_RELEASES_URL, GITHUB_LATEST_API,
-                         is_newer_version)
+                         GITHUB_RELEASES_URL, GITHUB_RELEASES_ATOM,
+                         GITHUB_LATEST_API, is_newer_version)
 except ImportError as e:
     root = tk.Tk()
     root.withdraw()
@@ -216,7 +217,8 @@ class BackupGUI(tk.Tk):
         tk.Button(link_row, text="打开发布页", font=FONT_SMALL,
                   bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=3, cursor="hand2",
-                  command=lambda: webbrowser.open(GITHUB_RELEASES_URL)
+                  command=lambda: webbrowser.open(
+                      state.get("release_url") or GITHUB_RELEASES_URL)
                   ).pack(side=tk.RIGHT)
         tk.Button(link_row, text="打开仓库", font=FONT_SMALL,
                   bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
@@ -327,10 +329,47 @@ class BackupGUI(tk.Tk):
             except urllib.error.HTTPError as e:
                 if e.code == 404:
                     q.put(("no_release", None))
+                elif e.code in (403, 429):
+                    q.put(("feed_or_error",
+                           "GitHub API 限流（403/429），正在尝试备用方式..."))
                 else:
                     q.put(("error", f"GitHub API 返回 {e.code} {e.reason}"))
             except Exception as e:
-                q.put(("error", f"{type(e).__name__}: {e}"))
+                q.put(("feed_or_error", f"GitHub API 访问失败：{e}"))
+
+        def fetch_latest_from_feed():
+            """API 限流时的兜底：从 releases.atom 取最新标签"""
+            req = urllib.request.Request(
+                GITHUB_RELEASES_ATOM, headers={"User-Agent": ua})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                root = ET.fromstring(resp.read())
+            ns = {"a": "http://www.w3.org/2005/Atom"}
+            entries = root.findall("a:entry", ns)
+            if not entries:
+                return None
+            first = entries[0]
+            title = (first.findtext("a:title", default="", namespaces=ns)
+                     or "").strip()
+            link = first.find("a:link", ns)
+            url = (link.get("href") if link is not None
+                   else GITHUB_RELEASES_URL)
+            updated = (first.findtext("a:updated", default="", namespaces=ns)
+                       or "").strip()
+            if "/tag/" in url:
+                tag = url.rsplit("/", 1)[-1] or title
+            else:
+                tag = title
+            return {"tag": tag, "url": url, "updated": updated}
+
+        def feed_worker(reason):
+            try:
+                info = fetch_latest_from_feed()
+                if info and info.get("tag"):
+                    q.put(("feed", info))
+                else:
+                    q.put(("error", reason + "；备用方式也未找到 Release"))
+            except Exception as e:
+                q.put(("error", f"{reason}；备用方式失败：{e}"))
 
         def download_update():
             asset = state["asset"]
@@ -401,6 +440,25 @@ class BackupGUI(tk.Tk):
                     kind, payload = q.get_nowait()
                     if kind == "release":
                         handle_release(payload)
+                    elif kind == "feed_or_error":
+                        status_var.set(payload)
+                        threading.Thread(target=feed_worker,
+                                         args=(payload,), daemon=True).start()
+                    elif kind == "feed":
+                        info = payload
+                        state["release_url"] = info.get("url") or GITHUB_RELEASES_URL
+                        state["asset"] = None
+                        tag = info.get("tag") or ""
+                        set_notes(
+                            f"最新标签：{tag}\n发布时间：{info.get('updated', '')}\n\n"
+                            "GitHub API 当前限流，未获取发布说明与附件列表。\n"
+                            "请点击“打开发布页”查看并下载。")
+                        if is_newer_version(tag, APP_VERSION):
+                            status_var.set(f"发现新版本 {tag}（当前 v{APP_VERSION}）")
+                        else:
+                            status_var.set(f"当前已是最新版本（v{APP_VERSION}）")
+                        set_busy(False)
+                        download_btn.config(state=tk.DISABLED)
                     elif kind == "no_release":
                         set_busy(False)
                         status_var.set("仓库还没有发布 Release 版本")

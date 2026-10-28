@@ -9,6 +9,7 @@ GITHUB_OWNER = "paynehe3023"
 GITHUB_REPO = "swCfgBackup"
 GITHUB_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
 GITHUB_RELEASES_URL = f"{GITHUB_URL}/releases"
+GITHUB_RELEASES_ATOM = f"{GITHUB_URL}/releases.atom"
 GITHUB_LATEST_API = (
     f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 )
