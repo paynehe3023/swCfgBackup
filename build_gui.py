@@ -1,16 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-PyInstaller 打包脚本 — 交换机配置备份工具 GUI 版
+"""PyInstaller 打包脚本 — GUI 免费版 / 注册版
+
 用法：
-  python build_gui.py
+    python build_gui.py                  # 同时构建免费版和注册版（默认）
+    python build_gui.py --edition free
+    python build_gui.py --edition commercial
 
-生成 dist/交换机配置备份工具GUI.exe
+输出：
+    dist/交换机配置备份工具GUI.exe          # 免费版（仅本地使用，不上传 GitHub）
+    dist/交换机配置备份工具GUI-注册版.exe    # 注册版（GitHub 只发布这个）
+    dist/swCfgBackup-v<版本>-win64.exe      # 注册版的 ASCII 发布附件
 """
-
-import subprocess
-import sys
+import argparse
 import os
 import shutil
+import subprocess
+import sys
 
 # 打包前校验 paramiko 版本：5.x 不再兼容只支持 ssh-rsa 的老式交换机
 try:
@@ -24,14 +29,40 @@ if not _PARAMIKO_VERSION.startswith("3."):
           f"必须使用 3.x（先执行 pip install -r requirements.txt）")
     sys.exit(1)
 
-# 项目根目录（build_gui.py 所在目录）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
+try:
+    from version import APP_VERSION
+except Exception:
+    APP_VERSION = "0.0.0"
 
-# 打包配置
-APP_NAME = "交换机配置备份工具GUI"
-ENTRY_SCRIPT = "backup_gui.py"
+EDITIONS = {
+    "free": {
+        "name": "swCfgBackup",
+        "entry": "backup_gui.py",
+        "work": "build_gui_free",
+        "commercial": False,
+        "generator": False,
+        "version_file": "version_info.txt",
+    },
+    "commercial": {
+        "name": "swCfgBackupS",
+        "entry": "backup_gui_commercial.py",
+        "work": "build_gui_commercial",
+        "commercial": True,
+        "generator": False,
+        "version_file": "version_info_commercial.txt",
+    },
+    "generator": {
+        "name": "swCfgBackupS-注册机",
+        "entry": "license_tools/generator_gui.py",
+        "work": "build_generator",
+        "commercial": False,
+        "generator": True,
+        "version_file": "version_info_tool.txt",
+    },
+}
 
-# 需要打包的 Python 模块
 HIDDEN_IMPORTS = [
     "backup",
     "collector",
@@ -40,150 +71,144 @@ HIDDEN_IMPORTS = [
     "version",
     "paramiko",
     "openpyxl",
-]
-
-# paramiko 依赖的加密库
-HIDDEN_IMPORTS += [
     "cryptography",
     "cffi",
     "bcrypt",
-    "nacl",       # PyNaCl 的 import 名
+    "nacl",
 ]
 
-# 排除的不必要模块（减小体积）
-# ⚠️ tkinter 整个包必须完整保留，不要排除任何 tkinter.* 子模块
-#    之前排除 tkinter.test/__main__/tix 等导致整个 tkinter 没被打包，启动报
-#    "No module named 'tkinter.constants'"
 EXCLUDE_MODULES = [
-    # --- 标准库中不需要的 ---
     "unittest", "pydoc", "doctest", "pdb", "test",
     "xmlrpc", "lib2to3",
     "turtle", "turtledemo",
-    # --- 包管理器（运行时不需要）---
     "pip", "ensurepip", "setuptools",
     "wheel", "pkg_resources",
-    # --- 第三方包：paramiko 不需要这些 ---
-    "invoke",               # fabric 的依赖，paramiko 不需要
-    "fabric",               # 不使用 fabric
-    # --- openpyxl 可选依赖（运行时用不到）---
+    "invoke", "fabric",
     "numpy", "PIL", "PIL.Image", "lxml", "lxml.etree",
-    # --- 不需要的数据/绘图库 ---
     "matplotlib", "pandas", "scipy",
     "PyQt5", "PyQt6", "PySide2", "PySide6",
 ]
 
 
-def build():
-    print("=" * 50)
-    print("  交换机配置备份工具 GUI — PyInstaller 打包")
-    print("=" * 50)
-
-    # 清理旧的构建产物
-    for d in ["build_gui"]:
-        p = os.path.join(BASE_DIR, d)
-        if os.path.isdir(p):
-            try:
-                shutil.rmtree(p)
-            except Exception:
-                pass  # 沙箱保护可能导致删除失败，忽略
-    spec_file = os.path.join(BASE_DIR, f"{APP_NAME}.spec")
-    if os.path.isfile(spec_file):
+def _clean(path: str) -> None:
+    if os.path.isdir(path):
         try:
-            os.remove(spec_file)
+            shutil.rmtree(path)
+        except Exception:
+            pass
+    elif os.path.isfile(path):
+        try:
+            os.remove(path)
         except Exception:
             pass
 
-    # 确保输出目录
+
+def build_one(edition: str) -> str:
+    cfg = EDITIONS[edition]
+    name = cfg["name"]
+    entry = cfg["entry"]
+    work_dir = os.path.join(BASE_DIR, cfg["work"])
     dist_dir = os.path.join(BASE_DIR, "dist")
     os.makedirs(dist_dir, exist_ok=True)
 
-    # 构建 UPX 参数
-    upx_path = os.path.join(BASE_DIR, "upx.exe")
-    use_upx = os.path.isfile(upx_path)
+    print("=" * 60)
+    print(f"  {'注册版' if cfg['commercial'] else '免费版'} — PyInstaller 打包")
+    print("=" * 60)
 
-    # 构建命令
+    _clean(work_dir)
+    spec_file = os.path.join(BASE_DIR, f"{name}.spec")
+    _clean(spec_file)
+
+    use_upx = os.path.isfile(os.path.join(BASE_DIR, "upx.exe"))
+
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onefile",                           # 单文件 exe
-        "--windowed",                          # GUI 程序（不弹出控制台窗口）
-        "--name", APP_NAME,
-        "--noconfirm",                         # 不询问确认
-        "--clean",                             # 清理缓存
-        "--distpath", dist_dir,                # 输出到 dist/
-        "--workpath", os.path.join(BASE_DIR, "build_gui"),
+        "--onefile",
+        "--windowed",
+        "--name", name,
+        "--noconfirm",
+        "--clean",
+        "--distpath", dist_dir,
+        "--workpath", work_dir,
     ]
 
-    # 图标与 image 资源（缺失时降级为默认图标，不中断打包）
     icon_path = os.path.join(BASE_DIR, "image", "icon.ico")
     if os.path.isfile(icon_path):
         cmd += ["--icon", icon_path]
     else:
         print("  [提示] 未找到 image/icon.ico，使用默认图标")
+
     image_dir = os.path.join(BASE_DIR, "image")
     if os.path.isdir(image_dir):
         cmd += ["--add-data", f"{image_dir};image"]
-    version_file = os.path.join(BASE_DIR, "version_info.txt")
+
+    version_file = os.path.join(BASE_DIR, cfg["version_file"])
     if os.path.isfile(version_file):
         cmd += ["--version-file", version_file]
 
-    # UPX 压缩
     if use_upx:
         cmd += ["--upx-dir", BASE_DIR]
         print("  [优化] 启用 UPX 压缩")
-    else:
-        print("  [提示] 未找到 upx.exe，跳过 UPX 压缩")
 
-    # 排除不必要的模块
     for mod in EXCLUDE_MODULES:
         cmd += ["--exclude-module", mod]
 
-    # 添加隐藏导入
-    for mod in HIDDEN_IMPORTS:
+    hidden = list(HIDDEN_IMPORTS)
+    if cfg["commercial"]:
+        hidden += ["license_guard", "backup_gui"]
+    if cfg["generator"]:
+        hidden = ["license_guard", "make_license", "version", "cryptography"]
+    for mod in hidden:
         cmd += ["--hidden-import", mod]
 
-    # tkinter 子模块：PyInstaller 静态分析对 `from tkinter import xxx` 有时会漏，
-    # 手动声明确保整个 tkinter 包齐全
     cmd += ["--collect-submodules", "tkinter"]
     cmd += ["--collect-submodules", "_tkinter"]
+    if not cfg["generator"]:
+        cmd += ["--collect-submodules", "paramiko"]
+    cmd += [os.path.join(BASE_DIR, entry)]
 
-    # 收集 paramiko 子模块（cryptography 不需要 collect-submodules，PyInstaller 会自动发现需要的）
-    cmd += ["--collect-submodules", "paramiko"]
-
-    # 工作目录设为项目根
-    cmd += [os.path.join(BASE_DIR, ENTRY_SCRIPT)]
-
-    print(f"\n  工作目录: {BASE_DIR}")
-    print(f"  排除模块: {len(EXCLUDE_MODULES)} 个")
-    print(f"  隐藏导入: {len(HIDDEN_IMPORTS)} 个")
+    print(f"  入口: {entry}")
+    print(f"  输出: {os.path.join(dist_dir, name + '.exe')}")
     print()
 
     result = subprocess.run(cmd, cwd=BASE_DIR)
-
     if result.returncode != 0:
-        print(f"\n  [错误] 打包失败 (exit code: {result.returncode})")
+        print(f"\n  [错误] {edition} 打包失败 (exit code: {result.returncode})")
         sys.exit(1)
 
-    # 验证输出
-    exe_path = os.path.join(dist_dir, f"{APP_NAME}.exe")
-    if os.path.exists(exe_path):
-        size_mb = os.path.getsize(exe_path) / (1024 * 1024)
-        print(f"\n  [成功] 打包完成!")
-        print(f"  输出文件: {exe_path}")
-        print(f"  文件大小: {size_mb:.1f} MB")
-
-        # 清理中间文件
-        build_dir = os.path.join(BASE_DIR, "build_gui")
-        if os.path.isdir(build_dir):
-            shutil.rmtree(build_dir)
-        if os.path.isfile(spec_file):
-            os.remove(spec_file)
-        print(f"  [清理] 已删除中间构建文件")
-    else:
+    exe_path = os.path.join(dist_dir, f"{name}.exe")
+    if not os.path.exists(exe_path):
         print(f"\n  [错误] 未找到输出文件: {exe_path}")
         sys.exit(1)
 
-    print(f"\n{'=' * 50}")
+    size_mb = os.path.getsize(exe_path) / (1024 * 1024)
+    print(f"\n  [成功] {exe_path}  ({size_mb:.1f} MB)")
+
+    _clean(work_dir)
+    _clean(spec_file)
+    print("  [清理] 已删除中间构建文件\n")
+    return exe_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="构建免费版 / 注册版 / 注册机")
+    parser.add_argument("--edition",
+                        choices=["free", "commercial", "generator", "all"],
+                        default="all", help="默认构建全部三个 exe")
+    args = parser.parse_args()
+
+    editions = (["free", "commercial", "generator"]
+                if args.edition == "all" else [args.edition])
+    built = {}
+    for edition in editions:
+        built[edition] = build_one(edition)
+
+    print("=" * 60)
+    print(f"  免费版（本地使用，不要上传）：{built.get('free', '未构建')}")
+    print(f"  注册版（GitHub 只上传这个）：{built.get('commercial', '未构建')}")
+    print(f"  注册机（仅作者本地使用）：{built.get('generator', '未构建')}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    build()
+    main()

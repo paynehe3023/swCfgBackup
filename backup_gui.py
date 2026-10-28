@@ -83,7 +83,7 @@ FONT_COUNT  = ("Microsoft YaHei UI", 20, "bold")
 class BackupGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"{APP_NAME}  v{APP_VERSION} by {APP_AUTHOR}")
+        self.title(APP_NAME)
         self.geometry("1080x720")
         self.minsize(900, 600)
         self.configure(bg=C_BG)
@@ -271,6 +271,15 @@ class BackupGUI(tk.Tk):
             check_btn.config(state=tk.DISABLED if value else tk.NORMAL)
             download_btn.config(
                 state=tk.NORMAL if (state["asset"] and not value) else tk.DISABLED)
+            try:
+                if value:
+                    bar.config(mode="indeterminate")
+                    bar.start(12)
+                else:
+                    bar.stop()
+                    bar.config(mode="determinate", maximum=100, value=0)
+            except Exception:
+                pass
 
         def pick_asset(assets):
             for suffix in (".exe", ".zip"):
@@ -305,32 +314,24 @@ class BackupGUI(tk.Tk):
             if state["busy"]:
                 return
             set_busy(True)
-            status_var.set("正在检查 GitHub 最新版本...")
-            bar.config(mode="determinate", maximum=100, value=0)
-            threading.Thread(target=check_worker, daemon=True).start()
+            state["feed_tag"] = ""
+            state["feed_time"] = ""
+            status_var.set("正在检查最新版本...")
+            set_notes("正在获取最新版本信息...")
+            threading.Thread(target=feed_check_worker, daemon=True).start()
 
-        def check_worker():
+        def feed_check_worker():
+            """优先从 releases.atom 取最新标签，避免 API 限流"""
             try:
-                req = urllib.request.Request(
-                    GITHUB_LATEST_API,
-                    headers={"User-Agent": ua,
-                             "Accept": "application/vnd.github+json"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                q.put(("release", data))
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    q.put(("no_release", None))
-                elif e.code in (403, 429):
-                    q.put(("feed_or_error",
-                           "GitHub API 限流（403/429），正在尝试备用方式..."))
+                info = fetch_latest_from_feed()
+                if info and info.get("tag"):
+                    q.put(("feed", info))
                 else:
-                    q.put(("error", f"GitHub API 返回 {e.code} {e.reason}"))
+                    q.put(("feed_failed", "发布订阅源中没有 Release"))
             except Exception as e:
-                q.put(("feed_or_error", f"GitHub API 访问失败：{e}"))
+                q.put(("feed_failed", f"{type(e).__name__}: {e}"))
 
         def fetch_latest_from_feed():
-            """API 限流时的兜底：从 releases.atom 取最新标签"""
             req = urllib.request.Request(
                 GITHUB_RELEASES_ATOM, headers={"User-Agent": ua})
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -353,15 +354,23 @@ class BackupGUI(tk.Tk):
                 tag = title
             return {"tag": tag, "url": url, "updated": updated}
 
-        def feed_worker(reason):
+        def api_worker():
+            """仅在发现新版本、需要附件信息时调用 API"""
             try:
-                info = fetch_latest_from_feed()
-                if info and info.get("tag"):
-                    q.put(("feed", info))
+                req = urllib.request.Request(
+                    GITHUB_LATEST_API,
+                    headers={"User-Agent": ua,
+                             "Accept": "application/vnd.github+json"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                q.put(("release", data))
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    q.put(("no_release", None))
                 else:
-                    q.put(("error", reason + "；备用方式也未找到 Release"))
+                    q.put(("api_failed", f"GitHub API 返回 {e.code} {e.reason}"))
             except Exception as e:
-                q.put(("error", f"{reason}；备用方式失败：{e}"))
+                q.put(("api_failed", f"{type(e).__name__}: {e}"))
 
         def download_update():
             asset = state["asset"]
@@ -384,6 +393,10 @@ class BackupGUI(tk.Tk):
             check_btn.config(state=tk.DISABLED)
             download_btn.config(state=tk.DISABLED)
             status_var.set("正在下载...")
+            try:
+                bar.stop()
+            except Exception:
+                pass
             bar.config(mode="determinate", maximum=100, value=0)
             threading.Thread(target=download_worker,
                              args=(asset.get("browser_download_url"), path),
@@ -432,33 +445,51 @@ class BackupGUI(tk.Tk):
                     kind, payload = q.get_nowait()
                     if kind == "release":
                         handle_release(payload)
-                    elif kind == "feed_or_error":
-                        status_var.set(payload)
-                        threading.Thread(target=feed_worker,
-                                         args=(payload,), daemon=True).start()
                     elif kind == "feed":
                         info = payload
+                        tag = info.get("tag") or ""
+                        state["feed_tag"] = tag
+                        state["feed_time"] = info.get("updated", "")
                         state["release_url"] = info.get("url") or GITHUB_RELEASES_URL
                         state["asset"] = None
-                        tag = info.get("tag") or ""
-                        set_notes(
-                            f"最新标签：{tag}\n发布时间：{info.get('updated', '')}\n\n"
-                            "GitHub API 当前限流，未获取发布说明与附件列表。\n"
-                            "请点击“打开发布页”查看并下载。")
                         if is_newer_version(tag, APP_VERSION):
-                            status_var.set(f"发现新版本 {tag}（当前 v{APP_VERSION}）")
+                            status_var.set(
+                                f"发现新版本 {tag}，正在获取下载信息...")
+                            set_notes(
+                                f"最新标签：{tag}\n发布时间：{info.get('updated', '')}\n\n"
+                                "正在获取发布说明与附件...")
+                            threading.Thread(target=api_worker,
+                                             daemon=True).start()
                         else:
-                            status_var.set(f"当前已是最新版本（v{APP_VERSION}）")
+                            set_notes(
+                                f"最新标签：{tag}\n发布时间：{info.get('updated', '')}\n\n"
+                                f"当前已是最新版本（v{APP_VERSION}）。")
+                            status_var.set(
+                                f"当前已是最新版本（v{APP_VERSION}）")
+                            set_busy(False)
+                            download_btn.config(state=tk.DISABLED)
+                    elif kind == "feed_failed":
+                        set_notes(payload)
+                        status_var.set("发布订阅源不可用，正在尝试 GitHub API...")
+                        threading.Thread(target=api_worker, daemon=True).start()
+                    elif kind == "api_failed":
                         set_busy(False)
                         download_btn.config(state=tk.DISABLED)
+                        tag = state.get("feed_tag") or ""
+                        if tag and is_newer_version(tag, APP_VERSION):
+                            status_var.set(
+                                f"发现新版本 {tag}（下载信息暂不可用，请打开发布页）")
+                            set_notes(
+                                f"最新标签：{tag}\n发布时间：{state.get('feed_time', '')}\n\n"
+                                "GitHub API 暂时不可用，无法获取发布说明与附件列表。\n"
+                                "请点击“打开发布页”查看并下载。")
+                        else:
+                            status_var.set(f"检查失败：{payload}")
                     elif kind == "no_release":
                         set_busy(False)
                         status_var.set("仓库还没有发布 Release 版本")
                         set_notes("暂无 Release。\n\n推送代码后，请在 GitHub 仓库的 "
-                                  "Releases 页面创建标签（如 v0.0.2）并上传 exe/zip。")
-                    elif kind == "error":
-                        set_busy(False)
-                        status_var.set(f"检查失败：{payload}")
+                                  "Releases 页面创建标签（如 v1.0.0）并上传 exe/zip。")
                     elif kind == "progress":
                         done, total = payload
                         if total > 0:

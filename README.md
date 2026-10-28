@@ -8,7 +8,7 @@
 
 只读采集、批量并发、差异对比、完整性校验、主机名回填、失败补采、单台临时备份。
 
-- 版本：v0.0.2
+- 版本：v1.0.0
 - 作者：payne
 - 仓库：<https://github.com/paynehe3023/swCfgBackup>
 
@@ -26,6 +26,7 @@
 - **单台备份**：在 GUI 输入 IP / 端口 / 账号 / 密码，单独备份一台不在清单里的设备。
 - **自动日志**：每次批量或单台备份自动在备份目录生成 `backup_log_*.txt`。
 - **关于与更新**：关于窗口展示版本/作者，可从 GitHub 检查并下载最新版本（不显示仓库地址）。
+- **商业授权（注册版）**：Ed25519 离线注册码，绑定本机机器码，升级新版本继续沿用原注册码。
 - **并发执行**：多线程同时备份多台设备，默认并发 3。
 
 ## 环境要求
@@ -39,7 +40,7 @@
 
 ### 方式一：使用打包好的 exe
 
-运行 `dist/交换机配置备份工具GUI.exe`（exe 内置了运行依赖，无需 Python 环境）。
+运行 `dist/swCfgBackupS.exe`（注册版，首次运行需要激活；exe 内置运行依赖，无需 Python 环境）。
 
 ### 方式二：源码运行
 
@@ -149,18 +150,73 @@ backup/
 - Excel 被占用时提示关闭文件，不影响备份结果；
 - 命令行可用 `--no-write-back` 关闭。
 
+## 版本与授权
+
+对外发布的是**注册版 `swCfgBackupS.exe`**；首次运行需要输入注册码，激活后正常使用。
+
+### 使用步骤（注册版）
+
+1. 运行 `swCfgBackupS.exe`；
+2. 首次启动会显示**本机机器码**（26 位，按 5 位分组）；
+3. **把机器码发给作者 payne，联系领取注册码**（请通过购买/分发渠道联系作者）；
+4. 把收到的注册码粘贴到激活窗口，点击「激活」；
+5. 以后从 GitHub 下载新版本，直接替换 exe 即可，原注册码继续有效，无需重新领取。
+
+### 作者签发注册码
+
+1. 在作者本地打开注册机 `swCfgBackupS-注册机.exe`（或使用命令行）；
+2. 输入用户的机器码、客户名称、可选到期日，生成注册码；
+3. 把注册码发给用户。
+
+命令行方式：
+
+```bash
+python license_tools/make_license.py \
+    --machine "<机器码>" --customer "客户名称" \
+    --out license_tools/out/customer.key
+```
+
+图形注册机与私钥只在作者本地保存，不随软件发布。注册码保存在 `%APPDATA%\swCfgBackup\license.dat`。
+
+### 授权规则
+
+- 注册码使用 **Ed25519 签名**，程序只内置公钥，无法自行生成有效注册码；
+- 注册码绑定机器码，复制到其他电脑无效；
+- 一台电脑对应一个注册码；生成器默认拒绝为同一机器码重复签发（`--force` 可重发）；
+- 注册码**与软件版本无关**：从 GitHub 下载新版本后，原注册码继续有效，无需重新激活；
+- 支持可选到期日；留空表示永久；
+- 重装 Windows 会改变机器码，需要重新签发；一般硬件更换不影响（主要依据 MachineGuid）。
+
+### 私钥安全
+
+- `license_tools/private_key.pem` 是签发注册码的唯一凭据，已加入 `.gitignore`；
+- **绝不提交、绝不随软件分发**；请立即备份到安全位置；
+- 私钥丢失后无法再签发新注册码（已签发的仍有效）；私钥泄露则任何人都能伪造注册码；
+- 注册码生成器可以提交，私钥不能；
+- 后续版本**不要更换公钥或修改机器码算法**，否则已有注册码会失效。
+
+### 保护强度说明
+
+这是客户端离线校验：
+
+- 能防止普通用户把注册码复制到其他电脑，也能防止随意生成注册码；
+- 如果源码仓库公开，开发者仍可通过修改源码绕过校验；
+- 如需更强保护，建议源码仓库私有、只发布 exe，或使用 PyArmor / Nuitka 等加固，或改为在线激活/服务端校验。
+
 ## 更新与发布
 
-「关于」→「检查更新」通过 GitHub Releases API 获取最新版本：
+「关于」→「检查更新」优先读取 `releases.atom`，只有发现新版本时才调用 GitHub API 获取附件；API 限流时仍可通过「打开发布页」手动下载。
 
 - 支持查看发布说明；
 - 有 `.exe` / `.zip` 附件时可下载到本地（默认保存到“下载”目录，可自选路径）；
-- 下载的是文件，不会自动替换正在运行的 exe；关闭程序后手动替换即可。
+- 下载的是文件，不会自动替换正在运行的 exe；关闭程序后手动替换即可；
+- 注册码保存在 AppData，替换 exe 不影响授权。
 
-创建 Release 时建议：
+创建 Release 时：
 
-- 标签使用 `v0.0.2` 这类格式，与 `version.py` 中的 `APP_VERSION` 对应；
-- 附件名使用 **ASCII**，例如 `swCfgBackup-v0.0.2-win64.zip`，避免 URL 编码和部分下载工具的问题；
+- 标签使用 `v1.0.0` 这类格式，与 `version.py` 中的 `APP_VERSION` 对应；
+- **只上传注册版 `dist/swCfgBackupS.exe`**；免费版和注册机不要上传；
+- 附件名使用 ASCII，避免 URL 编码和部分下载工具的问题；
 - 产品名、窗口标题、版本资源中的中文不受影响。
 
 ## 构建 exe
@@ -168,31 +224,55 @@ backup/
 ```bash
 .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
 .venv/Scripts/python.exe tools/make_icon.py     # 由 image/configBak.png 生成 icon.ico / icon.png
-.venv/Scripts/python.exe build_gui.py           # 生成 dist/交换机配置备份工具GUI.exe
+.venv/Scripts/python.exe build_gui.py           # 默认构建免费版、注册版、注册机
+```
+
+输出：
+
+- `dist/swCfgBackup.exe`：免费版，仅本地调试使用，**不要上传**
+- `dist/swCfgBackupS.exe`：注册版，**GitHub 只上传这个**
+- `dist/swCfgBackupS-注册机.exe`：注册机，**仅作者本地使用，不要上传**
+
+单独构建：
+
+```bash
+python build_gui.py --edition free
+python build_gui.py --edition commercial
+python build_gui.py --edition generator
 ```
 
 - `image/icon.ico` 包含 16/20/24/32/40/48/64/96/128/256 多尺寸；
-- 打包时写入 `version_info.txt`，Windows 文件属性显示：
-  - 产品名：网络设备配置备份
-  - 公司/作者：payne
-  - 版本：0.0.2
+- 打包时写入版本资源，Windows 文件属性显示：
+  - 免费版：`swCfgBackup.exe`，产品名“网络设备配置备份”
+  - 注册版：`swCfgBackupS.exe`，产品名“网络设备配置备份（注册版）”
+  - 注册机：`swCfgBackupS-注册机.exe`，产品名“swCfgBackupS 注册机”
+  - 作者：payne；版本：1.0.0
 - 如果 `image/icon.ico` 缺失，打包脚本会降级为默认图标并继续。
 
 ## 项目结构
 
 ```
 swBackup/
-├── backup_gui.py          # GUI 入口
-├── backup_tool.py         # 命令行入口
-├── backup.py              # 备份调度、完整性校验、差异、保留、报告、主机名回填
-├── collector.py           # SSH 连接、只读白名单、终端交互
-├── inventory.py           # Excel 清单读取、模板、写回
-├── utils.py               # 控制台编码、依赖检查
-├── version.py             # 版本/作者/仓库地址/版本比较
-├── version_info.txt       # PyInstaller Windows 版本资源
+├── backup_gui.py              # GUI 入口（免费版）
+├── backup_gui_commercial.py   # 注册版入口：先激活再启动 GUI
+├── backup_tool.py             # 命令行入口
+├── backup.py                  # 备份调度、完整性校验、差异、保留、报告、主机名回填
+├── collector.py               # SSH 连接、只读白名单、终端交互
+├── inventory.py               # Excel 清单读取、模板、写回
+├── license_guard.py           # 注册码校验、机器码、激活窗口
+├── utils.py                   # 控制台编码、依赖检查
+├── version.py                 # 版本/作者/仓库地址/版本比较
+├── version_info.txt           # 免费版版本资源
+├── version_info_commercial.txt# 注册版版本资源
+├── version_info_tool.txt      # 注册机版本资源
 ├── build.py / build_gui.py
-├── tools/make_icon.py     # PNG → 多尺寸透明 ICO
-├── image/                 # 源图与生成好的图标
+├── tools/make_icon.py         # PNG → 多尺寸透明 ICO
+├── license_tools/
+│   ├── make_license.py        # 注册码签发核心（命令行）
+│   ├── generator_gui.py       # 图形注册机入口（打包为 swCfgBackupS-注册机.exe）
+│   ├── private_key.pem        # 私钥（已忽略，绝不提交）
+│   └── public_key.txt         # 公钥备份
+├── image/                     # 源图与生成好的图标
 ├── docs/GITHUB_PUSH_GUIDE.md
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -208,6 +288,8 @@ swBackup/
 4. **主机指纹**：SSH 使用 `AutoAddPolicy`，不校验主机指纹；请只在可信管理网络中使用。
 5. **备份内容**：配置文件可能包含 SNMP、账号等敏感信息，请限制备份目录访问权限，不要随意外发。
 6. **更新下载**：从 GitHub 下载的 exe/zip 未做签名校验，下载后请自行确认来源。
+7. **注册码私钥**：`license_tools/private_key.pem` 只保存在供应商本地，已加入 `.gitignore`；泄露后任何人都能伪造注册码。
+8. **客户端校验**：注册码为离线校验，源码公开时开发者仍可修改源码绕过；商业分发建议源码私有或使用加固方案。
 
 ## 常见问题
 
@@ -237,7 +319,27 @@ swBackup/
 
 **关于里提示没有 Release**
 
-仓库还未创建 GitHub Release。推送代码后，在 Releases 页面创建标签（如 `v0.0.2`）并上传 exe/zip。
+仓库还未创建 GitHub Release。推送代码后，在 Releases 页面创建标签（如 `v1.0.0`）并上传注册版 exe/zip。
+
+**注册版提示“注册码不适用于本机（机器码不一致）”**
+
+注册码绑定的是另一台电脑的机器码。请把当前激活窗口显示的机器码发给供应商重新签发；不要复制其他电脑的注册码。
+
+**重装系统或换电脑后无法激活**
+
+重装 Windows 会改变 MachineGuid，机器码随之变化，需要重新签发注册码。一般更换硬件不影响。
+
+**从 GitHub 下载新版本后需要重新激活吗？**
+
+不需要。注册码保存在 `%APPDATA%\swCfgBackup\license.dat`，与软件版本无关；替换 exe 后继续使用原注册码。
+
+**注册码丢失 / 想迁移到新电脑**
+
+注册码文件可以备份；迁移到新电脑需要按新机器码重新签发。供应商可通过 `license_tools/make_license.py --force` 重发。
+
+**激活窗口的机器码是什么**
+
+由 Windows MachineGuid 派生的 SHA-256 摘要，仅用于绑定授权；不包含用户名、密码等隐私信息。
 
 ## 中文内容与 GitHub
 

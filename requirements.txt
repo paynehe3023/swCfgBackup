@@ -4,3 +4,5 @@
 # 注意: paramiko 必须使用 3.x 版本，5.0 移除了老式交换机所需的 SHA-1 KEX 算法
 paramiko>=3.4.0,<4.0.0
 openpyxl>=3.1.2
+# 商业版注册码签名/校验（Ed25519）
+cryptography>=41.0

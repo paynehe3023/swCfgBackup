@@ -30,6 +30,11 @@ backup_log_*.txt
 .env
 .env.*
 *.local
+*.pem
+*.key
+license_tools/private_key.pem
+license_tools/issued.csv
+license_tools/out/
 .idea/
 .vscode/
 *.swp
