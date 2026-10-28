@@ -40,7 +40,7 @@ try:
     from backup import (run_backup, backup_device, cleanup_old_backups,
                         generate_backup_report, select_retry_devices,
                         DEFAULT_RETRY_DELAY)
-    from version import (APP_NAME, APP_VERSION, APP_AUTHOR, GITHUB_URL,
+    from version import (APP_NAME, APP_VERSION, APP_AUTHOR,
                          GITHUB_RELEASES_URL, GITHUB_RELEASES_ATOM,
                          GITHUB_LATEST_API, is_newer_version)
 except ImportError as e:
@@ -209,22 +209,14 @@ class BackupGUI(tk.Tk):
 
         link_row = tk.Frame(body, bg=C_BG)
         link_row.pack(fill=tk.X)
-        tk.Button(link_row, text=GITHUB_URL, font=FONT_BODY, bg=C_BG,
-                  fg=C_ACCENT, activebackground=C_BG, activeforeground=C_TEXT,
-                  relief=tk.FLAT, bd=0, cursor="hand2",
-                  command=lambda: webbrowser.open(GITHUB_URL)
-                  ).pack(side=tk.LEFT)
+        tk.Label(link_row, text="版本更新", font=FONT_BODY, bg=C_BG,
+                 fg=C_TEXT2).pack(side=tk.LEFT)
         tk.Button(link_row, text="打开发布页", font=FONT_SMALL,
                   bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=3, cursor="hand2",
                   command=lambda: webbrowser.open(
                       state.get("release_url") or GITHUB_RELEASES_URL)
                   ).pack(side=tk.RIGHT)
-        tk.Button(link_row, text="打开仓库", font=FONT_SMALL,
-                  bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
-                  padx=8, pady=3, cursor="hand2",
-                  command=lambda: webbrowser.open(GITHUB_URL)
-                  ).pack(side=tk.RIGHT, padx=6)
 
         tk.Frame(body, bg=C_BORDER, height=1).pack(fill=tk.X, pady=10)
 
@@ -463,7 +455,7 @@ class BackupGUI(tk.Tk):
                         set_busy(False)
                         status_var.set("仓库还没有发布 Release 版本")
                         set_notes("暂无 Release。\n\n推送代码后，请在 GitHub 仓库的 "
-                                  "Releases 页面创建标签（如 v0.0.1）并上传 exe/zip。")
+                                  "Releases 页面创建标签（如 v0.0.2）并上传 exe/zip。")
                     elif kind == "error":
                         set_busy(False)
                         status_var.set(f"检查失败：{payload}")
