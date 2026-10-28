@@ -2,7 +2,7 @@
 """应用版本与仓库信息（界面、关于窗口、更新检查、构建共用）"""
 
 APP_NAME = "网络设备配置备份"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 APP_AUTHOR = "payne"
 
 GITHUB_OWNER = "paynehe3023"

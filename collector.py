@@ -258,6 +258,10 @@ class SSHCollector:
                     self.ip, port=self.port,
                     username=self.username, password=self.password,
                     timeout=self.TIMEOUT,
+                    # 老设备协商/认证很慢（实测有设备要 14s 才完成认证），
+                    # 默认 15s 会在认证阶段被掐断，出现 “No existing session”
+                    banner_timeout=30,
+                    auth_timeout=30,
                     look_for_keys=False, allow_agent=False,
                     # 兼容老款华为/H3C交换机只支持 group1-sha1/group14-sha1 的情况
                     # paramiko 3.x 默认列表里有这些算法，空列表 = 全部启用

@@ -106,23 +106,35 @@ def backup_device(ip: str, username: str, password: str,
             print(f"  → {ip}  [缓存命中]  {change_mark}")
             return result
 
-        # 拉取当前配置（只读命令）；截断时重试一次
+        # 拉取当前配置（只读命令）
+        # 慢设备输出中间会停顿数秒，idle 必须给足；健康设备看到提示符就结束，
+        # idle 变大不会让正常设备变慢。
         print(f"  → 备份配置: {ip}", end="", flush=True)
         config_clean = ""
-        for attempt in (1, 2):
+        candidate = ""
+        for attempt, read_idle in ((1, 6.0), (2, 10.0)):
             config_raw = collector.send("display current-configuration",
-                                        idle=1.5, max_wait=120)
+                                        idle=read_idle, max_wait=180)
             candidate = _clean_ansi(config_raw)
             if _config_complete(candidate):
                 config_clean = candidate
                 break
+            # 输出可能还在路上：先把剩余内容读干净，再判断一次
+            extra = collector.drain(idle=read_idle, max_wait=60)
+            if extra:
+                candidate = _clean_ansi(config_raw + extra)
+                if _config_complete(candidate):
+                    config_clean = candidate
+                    break
             if attempt == 1:
-                collector.drain()   # 把上一次未输出完的内容读干净再重试
+                print(f"  … 输出不完整，重试一次", end="", flush=True)
                 time.sleep(1)
 
         if not config_clean:
+            tail_lines = [l.strip() for l in candidate.splitlines() if l.strip()]
+            last = tail_lines[-1] if tail_lines else "<空输出>"
             result["error"] = "配置不完整（疑似截断），已丢弃本次结果"
-            print("  ✗ 配置不完整")
+            print(f"  ✗ 配置不完整，末尾行: {last[:60]}")
             return result
 
         result["sysname"] = _extract_sysname(config_clean)
