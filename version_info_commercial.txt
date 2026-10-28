@@ -2,8 +2,8 @@
 # PyInstaller Windows 版本资源：注册版
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 0, 0, 0),
-    prodvers=(1, 0, 0, 0),
+    filevers=(1, 0, 1, 0),
+    prodvers=(1, 0, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -19,12 +19,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'payne'),
             StringStruct('FileDescription', '网络设备配置备份（注册版）'),
-            StringStruct('FileVersion', '1.0.0'),
+            StringStruct('FileVersion', '1.0.1'),
             StringStruct('InternalName', 'swCfgBackupS'),
             StringStruct('LegalCopyright', 'Copyright (C) 2026 payne'),
             StringStruct('OriginalFilename', 'swCfgBackupS.exe'),
             StringStruct('ProductName', '网络设备配置备份（注册版）'),
-            StringStruct('ProductVersion', '1.0.0')
+            StringStruct('ProductVersion', '1.0.1')
           ])
       ]),
     VarFileInfo([VarStruct('Translation', [2052, 1200])])

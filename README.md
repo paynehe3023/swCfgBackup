@@ -8,7 +8,7 @@
 
 只读采集、批量并发、差异对比、完整性校验、主机名回填、失败补采、单台临时备份。
 
-- 版本：v1.0.0
+- 版本：v1.0.1
 - 作者：payne
 - 仓库：<https://github.com/paynehe3023/swCfgBackup>
 
@@ -214,7 +214,7 @@ python license_tools/make_license.py \
 
 创建 Release 时：
 
-- 标签使用 `v1.0.0` 这类格式，与 `version.py` 中的 `APP_VERSION` 对应；
+- 标签使用 `v1.0.1` 这类格式，与 `version.py` 中的 `APP_VERSION` 对应；
 - **只上传注册版 `dist/swCfgBackupS.exe`**；免费版和注册机不要上传；
 - 附件名使用 ASCII，避免 URL 编码和部分下载工具的问题；
 - 产品名、窗口标题、版本资源中的中文不受影响。
@@ -246,7 +246,7 @@ python build_gui.py --edition generator
   - 免费版：`swCfgBackup.exe`，产品名“网络设备配置备份”
   - 注册版：`swCfgBackupS.exe`，产品名“网络设备配置备份（注册版）”
   - 注册机：`swCfgBackupS-注册机.exe`，产品名“swCfgBackupS 注册机”
-  - 作者：payne；版本：1.0.0
+  - 作者：payne；版本：1.0.1
 - 如果 `image/icon.ico` 缺失，打包脚本会降级为默认图标并继续。
 
 ## 项目结构
@@ -319,7 +319,7 @@ swBackup/
 
 **关于里提示没有 Release**
 
-仓库还未创建 GitHub Release。推送代码后，在 Releases 页面创建标签（如 `v1.0.0`）并上传注册版 exe/zip。
+创建新的 Release 时，在 Releases 页面选择标签（如 `v1.0.1`）并上传注册版 exe/zip。
 
 **注册版提示“注册码不适用于本机（机器码不一致）”**
 

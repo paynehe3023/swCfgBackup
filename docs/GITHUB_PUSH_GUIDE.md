@@ -5,7 +5,7 @@
 > 本项目实际值：
 > - 仓库：`https://github.com/paynehe3023/swCfgBackup.git`
 > - 分支：`main`
-> - 版本：`v1.0.0`
+> - 版本：`v1.0.1`
 > - 作者：`payne`
 
 ---
@@ -38,7 +38,7 @@
   ```
 - [ ] README 完整：功能、环境、安装、用法、输出、构建、FAQ、许可证。
 - [ ] `LICENSE`、`CHANGELOG.md` 存在。
-- [ ] 版本号一致：`version.py`、`version_info.txt`、即将创建的标签（如 `v1.0.0`）。
+- [ ] 版本号一致：`version.py`、`version_info.txt`、即将创建的标签（如 `v1.0.1`）。
 - [ ] 行尾与编码：`.gitattributes` 已设置 `text=auto`，二进制文件标记为 `binary`。
 - [ ] 构建产物已在本地验证：exe 可启动，关键功能可用。
 
@@ -114,16 +114,16 @@ git rebase origin/main          # 或 git merge origin/main
 打标签：
 
 ```bash
-git tag -a v1.0.0 -m "v1.0.0"
-git push origin v1.0.0
+git tag -a v1.0.1 -m "v1.0.1"
+git push origin v1.0.1
 ```
 
 在 GitHub → Releases → Draft a new release：
 
-1. 选择刚推送的标签（如 `v1.0.0`）。
+1. 选择刚推送的标签（如 `v1.0.1`）。
 2. 填写标题和发布说明（可粘贴 `CHANGELOG.md` 对应段落）。
 3. 上传附件：
-   - **建议 ASCII 文件名**：`swCfgBackup-v1.0.0-win64.zip` 或 `swCfgBackup-v1.0.0-win64.exe`。
+   - **建议 ASCII 文件名**：`swCfgBackupS-v1.0.1-win64.zip` 或 `swCfgBackupS.exe`。
    - 如果程序内“检查更新”要能下载，附件必须是 `.exe` 或 `.zip`。
    - 中文附件名 GitHub 支持，但 URL 会被编码，部分下载工具或脚本处理不便。
 4. 发布。
@@ -251,7 +251,7 @@ git push origin vX.Y.Z
 
 - 仓库：`https://github.com/paynehe3023/swCfgBackup.git`
 - 分支：`main`
-- 版本标签：`v1.0.0`
+- 版本标签：`v1.0.1`
 - 远程初始内容：仅一个占位 `README.md`
 - 采用流程：第 3 节（`fetch` + `reset --mixed` + 普通提交 + 快进推送）
 - 不提交：`dist/`、`.venv/`、`pw.xlsx`、备份目录、日志、`.bak`

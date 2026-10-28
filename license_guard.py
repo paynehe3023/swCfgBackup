@@ -286,6 +286,10 @@ def run_activation() -> bool:
               relief=tk.FLAT, bd=0, padx=12, pady=4, cursor="hand2",
               command=copy_machine_code).pack(side=tk.LEFT, padx=(8, 0))
 
+    tk.Label(body, text="获取激活码请联系 payne，微信：947919822",
+             font=("Microsoft YaHei UI", 10, "bold"), bg=BG, fg=OK,
+             anchor="w").pack(fill=tk.X, pady=(0, 10))
+
     tk.Label(body, text="第二步：粘贴供应商提供的注册码", font=FONT_HEAD,
              bg=BG, fg=TEXT, anchor="w").pack(fill=tk.X, pady=(4, 4))
     code_text = scrolledtext.ScrolledText(
