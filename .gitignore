@@ -1,0 +1,41 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# ---- 构建产物 ----
+build/
+build_*/
+dist/
+*.spec
+*.exe
+*.pdb
+*.manifest
+
+# ---- 运行时数据（绝对不要提交） ----
+backup/
+backup_*/
+pw.xlsx
+devices_template.xlsx
+*.bak
+*.tmp
+*.partial
+backup_log_*.txt
+*.diff
+
+# ---- 本地配置 / 编辑器 ----
+.env
+.env.*
+*.local
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---- 系统 ----
+Thumbs.db
+Desktop.ini
+.DS_Store

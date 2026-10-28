@@ -1,0 +1,6 @@
+# 交换机配置备份工具 — 运行依赖
+# 安装命令: pip install -r requirements.txt
+#
+# 注意: paramiko 必须使用 3.x 版本，5.0 移除了老式交换机所需的 SHA-1 KEX 算法
+paramiko>=3.4.0,<4.0.0
+openpyxl>=3.1.2
