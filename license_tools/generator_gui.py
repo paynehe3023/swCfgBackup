@@ -9,8 +9,11 @@ import os
 import sys
 import textwrap
 import tkinter as tk
+from datetime import date, timedelta
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext
+
+from tkcalendar import DateEntry
 
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(BASE))
@@ -18,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from version import APP_VERSION  # noqa: E402
 import make_license  # noqa: E402
+import reset_local_license  # noqa: E402
 
 
 def app_dir() -> Path:
@@ -118,9 +122,27 @@ class GeneratorApp(tk.Tk):
         add_row(0, "机器码", make_entry(self._v_machine))
         self._v_customer = tk.StringVar()
         add_row(1, "客户名称", make_entry(self._v_customer))
-        self._v_expires = tk.StringVar()
-        add_row(2, "到期日（可选）", make_entry(self._v_expires))
-        tk.Label(body, text="格式 YYYY-MM-DD，留空表示永久",
+
+        expiry_row = tk.Frame(body, bg=BG)
+        add_row(2, "到期日", expiry_row)
+        self._v_permanent = tk.BooleanVar(value=True)
+        tk.Checkbutton(expiry_row, text="永久有效", variable=self._v_permanent,
+                       font=FONT_SMALL, bg=BG, fg=TEXT2, selectcolor=CARD,
+                       activebackground=BG, activeforeground=TEXT,
+                       command=self._toggle_expiry).pack(side=tk.LEFT)
+        self._date_entry = DateEntry(
+            expiry_row, width=11, date_pattern="yyyy-mm-dd",
+            font=FONT, background=ACCENT, foreground="white",
+            borderwidth=0, normalbackground=CARD, normalforeground=TEXT,
+            weekendbackground=CARD, weekendforeground=TEXT,
+            othermonthbackground=SIDEBAR, othermonthforeground=TEXT2,
+            selectbackground=ACCENT, selectforeground="white",
+            headersbackground=SIDEBAR, headersforeground=TEXT,
+            locale="zh_CN")
+        self._date_entry.set_date(date.today() + timedelta(days=365))
+        self._date_entry.pack(side=tk.LEFT, padx=(8, 0))
+        self._date_entry.config(state="disabled")
+        tk.Label(body, text="勾选“永久有效”则不设到期；取消后可打开日历选择日期",
                  font=FONT_SMALL, bg=BG, fg=TEXT2
                  ).grid(row=3, column=1, sticky="w", pady=(0, 4))
 
@@ -171,13 +193,23 @@ class GeneratorApp(tk.Tk):
         body.rowconfigure(8, weight=1)
 
         result_btns = tk.Frame(body, bg=BG)
-        result_btns.grid(row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        result_btns.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         tk.Button(result_btns, text="复制注册码", font=FONT, bg=ACCENT,
                   fg="white", relief=tk.FLAT, bd=0, padx=12, pady=5,
                   cursor="hand2", command=self._copy).pack(side=tk.LEFT)
         tk.Button(result_btns, text="保存到文件", font=FONT, bg=CARD,
                   fg=TEXT, relief=tk.FLAT, bd=0, padx=12, pady=5,
                   cursor="hand2", command=self._save).pack(side=tk.LEFT, padx=8)
+        tk.Button(result_btns, text="取消本机注册", font=FONT, bg=ERR,
+                  fg="white", relief=tk.FLAT, bd=0, padx=12, pady=5,
+                  cursor="hand2", command=self._reset_local).pack(side=tk.RIGHT)
+
+    def _toggle_expiry(self):
+        state = "disabled" if self._v_permanent.get() else "normal"
+        try:
+            self._date_entry.config(state=state)
+        except Exception:
+            pass
 
     def _browse_key(self):
         path = filedialog.askopenfilename(
@@ -189,7 +221,14 @@ class GeneratorApp(tk.Tk):
     def _generate(self):
         machine = self._v_machine.get().strip()
         customer = self._v_customer.get().strip()
-        expires = self._v_expires.get().strip()
+        if self._v_permanent.get():
+            expires = ""
+        else:
+            try:
+                expires = self._date_entry.get_date().strftime("%Y-%m-%d")
+            except Exception:
+                self._status.config(text="请选择到期日期", fg=ERR)
+                return
         key_path = self._v_key.get().strip()
         if not machine:
             self._status.config(text="请填写机器码", fg=ERR)
@@ -242,6 +281,34 @@ class GeneratorApp(tk.Tk):
         except Exception as exc:
             self._status.config(text=f"复制失败：{exc}", fg=ERR)
 
+    def _reset_local(self):
+        if not messagebox.askyesno(
+                "取消本机注册",
+                "将删除本机注册码文件和本机签发记录。\n"
+                "不会吊销已发给客户的注册码。\n\n确定继续？",
+                parent=self):
+            return
+        try:
+            result = reset_local_license.reset_local(
+                extra_ledgers=[default_ledger_path()])
+        except Exception as exc:
+            self._status.config(text=f"取消失败：{exc}", fg=ERR)
+            return
+        if result["failed"]:
+            detail = "；".join(f"{p}: {e}" for p, e in result["failed"])
+            self._status.config(text=f"部分删除失败：{detail}", fg=ERR)
+            return
+        deleted = len(result["deleted"])
+        removed = sum(result["ledger_removed"].values())
+        parts = []
+        parts.append(f"删除注册码文件 {deleted} 个" if deleted
+                     else "本机没有注册码文件")
+        if removed:
+            parts.append(f"清理本机签发记录 {removed} 条")
+        msg = "；".join(parts) + "。\n请重新打开 swCfgBackupS 进行激活。"
+        self._status.config(text=msg.replace("\n", " "), fg=OK)
+        messagebox.showinfo("已取消本机注册", msg, parent=self)
+
     def _save(self):
         if not self._last_code:
             self._status.config(text="还没有生成注册码", fg=WARN)
@@ -261,7 +328,12 @@ class GeneratorApp(tk.Tk):
     def _clear(self):
         self._v_machine.set("")
         self._v_customer.set("")
-        self._v_expires.set("")
+        self._v_permanent.set(True)
+        try:
+            self._date_entry.set_date(date.today() + timedelta(days=365))
+            self._date_entry.config(state="disabled")
+        except Exception:
+            pass
         self._v_force.set(False)
         self._last_code = ""
         self._result.delete("1.0", tk.END)

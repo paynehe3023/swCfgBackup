@@ -157,12 +157,17 @@ def build_one(edition: str) -> str:
     if cfg["commercial"]:
         hidden += ["license_guard", "backup_gui"]
     if cfg["generator"]:
-        hidden = ["license_guard", "make_license", "version", "cryptography"]
+        hidden = ["license_guard", "make_license", "reset_local_license",
+                  "version", "cryptography", "tkcalendar", "babel",
+                  "babel.numbers", "babel.dates"]
     for mod in hidden:
         cmd += ["--hidden-import", mod]
 
     cmd += ["--collect-submodules", "tkinter"]
     cmd += ["--collect-submodules", "_tkinter"]
+    if cfg["generator"]:
+        cmd += ["--collect-submodules", "tkcalendar"]
+        cmd += ["--collect-data", "babel"]
     if not cfg["generator"]:
         cmd += ["--collect-submodules", "paramiko"]
     cmd += [os.path.join(BASE_DIR, entry)]

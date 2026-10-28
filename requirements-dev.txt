@@ -3,3 +3,7 @@
 
 pyinstaller>=6.0
 pillow>=10.0
+
+# 注册机日期选择控件
+tkcalendar>=1.6
+babel>=2.12
