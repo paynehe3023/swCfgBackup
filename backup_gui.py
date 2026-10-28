@@ -13,7 +13,6 @@ import re
 import threading
 import queue
 import time
-import webbrowser
 import urllib.request
 import urllib.error
 import xml.etree.ElementTree as ET
@@ -41,7 +40,7 @@ try:
                         generate_backup_report, select_retry_devices,
                         DEFAULT_RETRY_DELAY)
     from version import (APP_NAME, APP_VERSION, APP_AUTHOR,
-                         GITHUB_RELEASES_URL, GITHUB_RELEASES_ATOM,
+                         GITHUB_RELEASES_ATOM,
                          GITHUB_LATEST_API, is_newer_version)
 except ImportError as e:
     root = tk.Tk()
@@ -53,21 +52,105 @@ except ImportError as e:
 # ================================================================== #
 #  颜色 / 字体常量                                                     #
 # ================================================================== #
-C_BG        = "#1e2330"      # 主背景深蓝
-C_SIDEBAR   = "#161b27"      # 侧栏更深
-C_CARD      = "#252b3b"      # 卡片背景
-C_ACCENT    = "#3b82f6"      # 蓝色强调
-C_ACCENT2   = "#22c55e"      # 绿色成功
-C_WARN      = "#f59e0b"      # 黄色警告
-C_ERROR     = "#ef4444"      # 红色错误
-C_TEXT      = "#e2e8f0"      # 主文本
-C_TEXT2     = "#94a3b8"      # 次要文本
-C_BORDER    = "#334155"      # 边框
-C_ROW_ODD   = "#252b3b"
-C_ROW_EVEN  = "#1e2330"
-C_ROW_OK    = "#1a3a2a"
-C_ROW_FAIL  = "#3a1a1a"
-C_ROW_CHG   = "#3a3010"
+#  主题（日间为默认，可切换到夜间）                                      #
+# ================================================================== #
+# 两个主题使用同一组角色名，切换时覆盖 C_* 变量并重建界面。
+THEMES = {
+    "light": {
+        "BG": "#f4f6fa",          # 主背景浅灰蓝
+        "SIDEBAR": "#ffffff",     # 顶栏 / 侧栏 / 状态栏
+        "CARD": "#ffffff",        # 卡片、输入框背景
+        "HEAD": "#eef2f7",        # 表头、次级按钮背景
+        "ACCENT": "#2563eb",      # 蓝色强调
+        "ACCENT2": "#16a34a",     # 绿色成功
+        "WARN": "#d97706",        # 橙色警告
+        "ERROR": "#dc2626",       # 红色错误
+        "TEXT": "#1f2937",        # 主文本深灰
+        "TEXT2": "#64748b",       # 次要文本
+        "BORDER": "#dce2ea",      # 分隔线 / 边框
+        "ROW_ODD": "#ffffff",
+        "ROW_EVEN": "#f8fafc",
+        "ROW_OK": "#e9f7ef",      # 成功行底色
+        "ROW_FAIL": "#fdecec",    # 失败行底色
+        "ROW_CHG": "#fdf4e3",     # 变更行底色
+        "TAG_OK": "#15803d",
+        "TAG_FAIL": "#b91c1c",
+        "TAG_CHG": "#b45309",
+        "DISABLED_BG": "#e5e7eb",
+        "DISABLED_FG": "#9ca3af",
+    },
+    "dark": {
+        "BG": "#1e2330",
+        "SIDEBAR": "#161b27",
+        "CARD": "#252b3b",
+        "HEAD": "#2b3245",
+        "ACCENT": "#3b82f6",
+        "ACCENT2": "#22c55e",
+        "WARN": "#f59e0b",
+        "ERROR": "#ef4444",
+        "TEXT": "#e2e8f0",
+        "TEXT2": "#94a3b8",
+        "BORDER": "#334155",
+        "ROW_ODD": "#252b3b",
+        "ROW_EVEN": "#1e2330",
+        "ROW_OK": "#1a3a2a",
+        "ROW_FAIL": "#3a1a1a",
+        "ROW_CHG": "#3a3010",
+        "TAG_OK": "#86efac",
+        "TAG_FAIL": "#fca5a5",
+        "TAG_CHG": "#fde68a",
+        "DISABLED_BG": "#4b5563",
+        "DISABLED_FG": "#9ca3af",
+    },
+}
+
+CURRENT_THEME = {"name": "light"}
+
+
+def apply_theme(name: str) -> str:
+    """把主题配色写入 C_* 全局变量（重建界面后生效）"""
+    if name not in THEMES:
+        name = "light"
+    for key, value in THEMES[name].items():
+        globals()[f"C_{key}"] = value
+    CURRENT_THEME["name"] = name
+    return name
+
+
+def _theme_pref_path() -> Path:
+    base = os.environ.get("APPDATA") or str(Path.home())
+    return Path(base) / "swCfgBackup" / "ui.json"
+
+
+def load_theme_name() -> str:
+    """读取上次使用的主题，默认日间"""
+    try:
+        data = json.loads(_theme_pref_path().read_text(encoding="utf-8"))
+        name = str(data.get("theme") or "").lower()
+        if name in THEMES:
+            return name
+    except Exception:
+        pass
+    return "light"
+
+
+def save_theme_name(name: str) -> None:
+    path = _theme_pref_path()
+    try:
+        data = {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+        data["theme"] = name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+    except Exception:
+        pass
+
+
+apply_theme("light")
 
 FONT_TITLE  = ("Microsoft YaHei UI", 15, "bold")
 FONT_HEAD   = ("Microsoft YaHei UI", 10, "bold")
@@ -83,6 +166,7 @@ FONT_COUNT  = ("Microsoft YaHei UI", 20, "bold")
 class BackupGUI(tk.Tk):
     def __init__(self):
         super().__init__()
+        apply_theme(load_theme_name())
         self.title(APP_NAME)
         self.geometry("1080x720")
         self.minsize(900, 600)
@@ -130,6 +214,7 @@ class BackupGUI(tk.Tk):
         body.pack(fill=tk.BOTH, expand=True, padx=0, pady=0)
 
         self._build_sidebar(body)
+        tk.Frame(body, bg=C_BORDER, width=1).pack(side=tk.LEFT, fill=tk.Y)
         self._build_content(body)
 
         # ── 底部状态栏 ──
@@ -140,6 +225,7 @@ class BackupGUI(tk.Tk):
         bar = tk.Frame(self, bg=C_SIDEBAR, height=52)
         bar.pack(fill=tk.X, side=tk.TOP)
         bar.pack_propagate(False)
+        tk.Frame(self, bg=C_BORDER, height=1).pack(fill=tk.X, side=tk.TOP)
 
         tk.Label(bar, text=f"🛡  {APP_NAME}",
                  font=FONT_TITLE, bg=C_SIDEBAR, fg=C_TEXT
@@ -151,6 +237,14 @@ class BackupGUI(tk.Tk):
                   command=self._show_about
                   ).pack(side=tk.RIGHT, padx=(0, 6))
 
+        self._btn_theme = tk.Button(
+            bar, text=self._theme_button_text(), font=FONT_BODY,
+            bg=C_SIDEBAR, fg=C_TEXT2,
+            activebackground=C_CARD, activeforeground=C_TEXT,
+            relief=tk.FLAT, bd=0, padx=10, cursor="hand2",
+            command=self._toggle_theme)
+        self._btn_theme.pack(side=tk.RIGHT, padx=(0, 2))
+
         self._lbl_time = tk.Label(bar, text="", font=FONT_BODY,
                                    bg=C_SIDEBAR, fg=C_TEXT2)
         self._lbl_time.pack(side=tk.RIGHT, padx=20)
@@ -159,6 +253,114 @@ class BackupGUI(tk.Tk):
     def _update_clock(self):
         self._lbl_time.config(text=datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))
         self.after(1000, self._update_clock)
+
+    # ---------------------------------------------------------------- #
+    #  主题切换                                                          #
+    # ---------------------------------------------------------------- #
+    def _theme_button_text(self) -> str:
+        return "☀ 日间" if CURRENT_THEME["name"] == "light" else "🌙 夜间"
+
+    def _toggle_theme(self):
+        """在日间 / 夜间主题之间切换（保存偏好并重建界面）"""
+        if self._running or self._single_running:
+            messagebox.showwarning("提示", "备份进行中，暂不能切换主题")
+            return
+        name = "dark" if CURRENT_THEME["name"] == "light" else "light"
+        save_theme_name(name)
+        apply_theme(name)
+        self._rebuild_ui()
+
+    def _rebuild_ui(self):
+        """按当前主题重建界面，并恢复设备清单、结果、日志和输入参数"""
+        self._cancel_device_edit()
+        devices = list(self._devices)
+        results = list(self._results)
+
+        log_text = ""
+        log_ranges = []
+        try:
+            log_text = self._log_text.get("1.0", tk.END)
+            for tag in ("ok", "fail", "warn", "info", "head"):
+                ranges = self._log_text.tag_ranges(tag)
+                for start, end in zip(ranges[::2], ranges[1::2]):
+                    log_ranges.append((tag, str(start), str(end)))
+        except Exception:
+            pass
+
+        tab_index = 0
+        try:
+            current = self._nb.select()
+            if current:
+                tab_index = self._nb.index(current)
+        except Exception:
+            pass
+
+        values = {}
+        for name in ("_v_inv", "_v_sheet", "_v_bkdir", "_v_keepcount",
+                     "_v_retry_auth", "_v_conc", "_v_s_ip", "_v_s_port",
+                     "_v_s_user", "_v_s_pwd"):
+            var = getattr(self, name, None)
+            if var is not None:
+                try:
+                    values[name] = var.get()
+                except Exception:
+                    pass
+        progress = self._v_progress.get()
+        progress_text = self._lbl_progress.cget("text")
+        status_text = self._lbl_status.cget("text")
+        bkdir_text = self._lbl_bkdir_status.cget("text")
+        single_text = self._v_single_result.get()
+
+        for child in self.winfo_children():
+            child.destroy()
+
+        self.configure(bg=C_BG)
+        self._build_ui()
+
+        for name, value in values.items():
+            var = getattr(self, name, None)
+            if var is not None:
+                try:
+                    var.set(value)
+                except Exception:
+                    pass
+
+        for d in devices:
+            self._dev_tree.insert("", "end", values=(
+                d["ip"], d.get("hostname", ""), d.get("port", 22)))
+        if devices:
+            self._lbl_dev_count.config(
+                text=f"已加载 {len(devices)} 台设备", fg=C_ACCENT2)
+            self._card_total.config(text=str(len(devices)))
+
+        for r in results:
+            self._insert_result_row(r)
+        self._refresh_cards()
+
+        if log_text.strip():
+            self._log_text.config(state=tk.NORMAL)
+            self._log_text.insert("1.0", log_text.rstrip("\n"))
+            for tag, start, end in log_ranges:
+                try:
+                    self._log_text.tag_add(tag, start, end)
+                except Exception:
+                    pass
+            self._log_text.see(tk.END)
+            self._log_text.config(state=tk.DISABLED)
+
+        self._v_progress.set(progress)
+        self._lbl_progress.config(text=progress_text)
+        self._lbl_status.config(text=status_text)
+        self._lbl_bkdir_status.config(text=bkdir_text)
+        self._v_single_result.set(single_text)
+        if self._single_running:
+            self._btn_single.config(state=tk.DISABLED, bg=C_DISABLED_BG,
+                                    fg=C_DISABLED_FG, cursor="")
+        if tab_index:
+            try:
+                self._nb.select(tab_index)
+            except Exception:
+                pass
 
     # ---------------------------------------------------------------- #
     #  关于 / 检查更新                                                    #
@@ -180,7 +382,6 @@ class BackupGUI(tk.Tk):
 
         q = queue.Queue()
         state = {"busy": False, "asset": None,
-                 "release_url": GITHUB_RELEASES_URL,
                  "download_path": "", "closed": False}
         ua = f"swCfgBackup/{APP_VERSION}"
 
@@ -206,17 +407,6 @@ class BackupGUI(tk.Tk):
 
         body = tk.Frame(win, bg=C_BG)
         body.pack(fill=tk.BOTH, expand=True, padx=16, pady=12)
-
-        link_row = tk.Frame(body, bg=C_BG)
-        link_row.pack(fill=tk.X)
-        tk.Label(link_row, text="版本更新", font=FONT_BODY, bg=C_BG,
-                 fg=C_TEXT2).pack(side=tk.LEFT)
-        tk.Button(link_row, text="打开发布页", font=FONT_SMALL,
-                  bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
-                  padx=8, pady=3, cursor="hand2",
-                  command=lambda: webbrowser.open(
-                      state.get("release_url") or GITHUB_RELEASES_URL)
-                  ).pack(side=tk.RIGHT)
 
         tk.Frame(body, bg=C_BORDER, height=1).pack(fill=tk.X, pady=10)
 
@@ -244,19 +434,20 @@ class BackupGUI(tk.Tk):
         notes.config(state=tk.DISABLED)
 
         btn_row = tk.Frame(body, bg=C_BG)
-        btn_row.pack(fill=tk.X, pady=(10, 0))
+        btn_row.pack(fill=tk.X, pady=(10, 0), side=tk.BOTTOM)
         download_btn = tk.Button(btn_row, text="下载最新版本", font=FONT_BODY,
-                                 bg=C_ACCENT2, fg="white", relief=tk.FLAT, bd=0,
-                                 padx=10, pady=4, cursor="hand2", state=tk.DISABLED,
+                                 bg=C_DISABLED_BG, fg=C_DISABLED_FG,
+                                 relief=tk.FLAT, bd=0,
+                                 padx=10, pady=4, state=tk.DISABLED,
                                  command=lambda: download_update())
         download_btn.pack(side=tk.LEFT)
         open_folder_btn = tk.Button(btn_row, text="打开所在文件夹", font=FONT_BODY,
-                                    bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
+                                    bg=C_HEAD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                                     padx=10, pady=4, cursor="hand2",
                                     state=tk.DISABLED,
                                     command=lambda: open_folder())
         open_folder_btn.pack(side=tk.LEFT, padx=8)
-        tk.Button(btn_row, text="关闭", font=FONT_BODY, bg=C_CARD, fg=C_TEXT,
+        tk.Button(btn_row, text="关闭", font=FONT_BODY, bg=C_HEAD, fg=C_TEXT,
                   relief=tk.FLAT, bd=0, padx=10, pady=4, cursor="hand2",
                   command=lambda: close()).pack(side=tk.RIGHT)
 
@@ -266,11 +457,17 @@ class BackupGUI(tk.Tk):
             notes.insert("1.0", text)
             notes.config(state=tk.DISABLED)
 
+        def enable_download(enabled):
+            download_btn.config(
+                state=tk.NORMAL if enabled else tk.DISABLED,
+                bg=C_ACCENT2 if enabled else C_DISABLED_BG,
+                fg="white" if enabled else C_DISABLED_FG,
+                cursor="hand2" if enabled else "")
+
         def set_busy(value):
             state["busy"] = value
             check_btn.config(state=tk.DISABLED if value else tk.NORMAL)
-            download_btn.config(
-                state=tk.NORMAL if (state["asset"] and not value) else tk.DISABLED)
+            enable_download(bool(state["asset"]) and not value)
             try:
                 if value:
                     bar.config(mode="indeterminate")
@@ -297,7 +494,6 @@ class BackupGUI(tk.Tk):
             tag = data.get("tag_name") or ""
             name = data.get("name") or tag
             body_text = data.get("body") or ""
-            state["release_url"] = data.get("html_url") or GITHUB_RELEASES_URL
             state["asset"] = pick_asset(data.get("assets") or [])
             set_notes(f"{name}\n标签: {tag}\n\n{body_text}".strip()
                       or "该版本没有发布说明。")
@@ -307,7 +503,7 @@ class BackupGUI(tk.Tk):
                 status_var.set(f"当前已是最新版本（v{APP_VERSION}）")
             set_busy(False)
             if not state["asset"]:
-                download_btn.config(state=tk.DISABLED)
+                enable_download(False)
                 status_var.set(status_var.get() + "；该版本没有 exe/zip 附件")
 
         def check_update():
@@ -344,15 +540,14 @@ class BackupGUI(tk.Tk):
             title = (first.findtext("a:title", default="", namespaces=ns)
                      or "").strip()
             link = first.find("a:link", ns)
-            url = (link.get("href") if link is not None
-                   else GITHUB_RELEASES_URL)
+            url = link.get("href") if link is not None else ""
             updated = (first.findtext("a:updated", default="", namespaces=ns)
                        or "").strip()
             if "/tag/" in url:
                 tag = url.rsplit("/", 1)[-1] or title
             else:
                 tag = title
-            return {"tag": tag, "url": url, "updated": updated}
+            return {"tag": tag, "updated": updated}
 
         def api_worker():
             """仅在发现新版本、需要附件信息时调用 API"""
@@ -375,7 +570,6 @@ class BackupGUI(tk.Tk):
         def download_update():
             asset = state["asset"]
             if not asset:
-                webbrowser.open(state["release_url"])
                 return
             fname = re.sub(r'[<>:"/\\|?*]', "_",
                            str(asset.get("name") or "update.exe"))
@@ -391,7 +585,7 @@ class BackupGUI(tk.Tk):
             state["download_path"] = ""
             state["busy"] = True
             check_btn.config(state=tk.DISABLED)
-            download_btn.config(state=tk.DISABLED)
+            enable_download(False)
             status_var.set("正在下载...")
             try:
                 bar.stop()
@@ -450,7 +644,6 @@ class BackupGUI(tk.Tk):
                         tag = info.get("tag") or ""
                         state["feed_tag"] = tag
                         state["feed_time"] = info.get("updated", "")
-                        state["release_url"] = info.get("url") or GITHUB_RELEASES_URL
                         state["asset"] = None
                         if is_newer_version(tag, APP_VERSION):
                             status_var.set(
@@ -467,22 +660,22 @@ class BackupGUI(tk.Tk):
                             status_var.set(
                                 f"当前已是最新版本（v{APP_VERSION}）")
                             set_busy(False)
-                            download_btn.config(state=tk.DISABLED)
+                            enable_download(False)
                     elif kind == "feed_failed":
                         set_notes(payload)
                         status_var.set("发布订阅源不可用，正在尝试 GitHub API...")
                         threading.Thread(target=api_worker, daemon=True).start()
                     elif kind == "api_failed":
                         set_busy(False)
-                        download_btn.config(state=tk.DISABLED)
+                        enable_download(False)
                         tag = state.get("feed_tag") or ""
                         if tag and is_newer_version(tag, APP_VERSION):
                             status_var.set(
-                                f"发现新版本 {tag}（下载信息暂不可用，请打开发布页）")
+                                f"发现新版本 {tag}（下载信息暂不可用，请稍后重试）")
                             set_notes(
                                 f"最新标签：{tag}\n发布时间：{state.get('feed_time', '')}\n\n"
                                 "GitHub API 暂时不可用，无法获取发布说明与附件列表。\n"
-                                "请点击“打开发布页”查看并下载。")
+                                "请稍后重试检查更新。")
                         else:
                             status_var.set(f"检查失败：{payload}")
                     elif kind == "no_release":
@@ -511,6 +704,10 @@ class BackupGUI(tk.Tk):
             win.after(150, poll)
 
         win.protocol("WM_DELETE_WINDOW", close)
+        win.update_idletasks()
+        # 按内容自适应高度，避免高 DPI 下底部按钮被裁掉
+        need_h = min(820, max(600, win.winfo_reqheight()))
+        win.geometry(f"700x{need_h}")
         win.update_idletasks()
         x = self.winfo_rootx() + (self.winfo_width() - win.winfo_width()) // 2
         y = self.winfo_rooty() + (self.winfo_height() - win.winfo_height()) // 2
@@ -572,7 +769,7 @@ class BackupGUI(tk.Tk):
                   command=self._load_devices
                   ).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,4))
         tk.Button(btn_row, text="📄 生成模板",
-                  font=FONT_HEAD, bg="#475569", fg="white",
+                  font=FONT_HEAD, bg=C_HEAD, fg=C_TEXT,
                   relief=tk.FLAT, bd=0, padx=8, pady=6,
                   cursor="hand2",
                   command=self._generate_template
@@ -637,7 +834,7 @@ class BackupGUI(tk.Tk):
         self._btn_stop = tk.Button(
             sb, text="  ⏹  终止  ",
             font=FONT_HEAD,
-            bg=C_ERROR, fg="white", relief=tk.FLAT, bd=0,
+            bg=C_DISABLED_BG, fg=C_DISABLED_FG, relief=tk.FLAT, bd=0,
             padx=10, pady=6,
             state=tk.DISABLED,
             command=self._stop_backup
@@ -670,7 +867,7 @@ class BackupGUI(tk.Tk):
         style.map("TNotebook.Tab",
                   background=[("selected", C_ACCENT)],
                   foreground=[("selected", "white")])
-        style.configure("TProgressbar",    troughcolor=C_CARD,
+        style.configure("TProgressbar",    troughcolor=C_HEAD,
                          background=C_ACCENT, borderwidth=0, thickness=8)
 
         # Tab 1 — 概览面板
@@ -749,7 +946,7 @@ class BackupGUI(tk.Tk):
                          foreground=C_TEXT, rowheight=24,
                          borderwidth=0, relief=tk.FLAT)
         style.configure("Results.Treeview.Heading",
-                         background=C_SIDEBAR, foreground=C_TEXT,
+                         background=C_HEAD, foreground=C_TEXT,
                          font=FONT_HEAD, relief=tk.FLAT)
         style.map("Results.Treeview",
                   background=[("selected", C_ACCENT)])
@@ -762,7 +959,7 @@ class BackupGUI(tk.Tk):
                   command=self._export_report
                   ).pack(side=tk.LEFT, padx=4)
         tk.Button(toolbar, text="打开备份目录", font=FONT_BODY,
-                  bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
+                  bg=C_HEAD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=4, cursor="hand2",
                   command=self._open_backup_dir
                   ).pack(side=tk.LEFT, padx=4)
@@ -786,9 +983,9 @@ class BackupGUI(tk.Tk):
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        self._tree.tag_configure("ok",      background=C_ROW_OK,   foreground="#86efac")
-        self._tree.tag_configure("fail",    background=C_ROW_FAIL, foreground="#fca5a5")
-        self._tree.tag_configure("changed", background=C_ROW_CHG,  foreground="#fde68a")
+        self._tree.tag_configure("ok",      background=C_ROW_OK,   foreground=C_TAG_OK)
+        self._tree.tag_configure("fail",    background=C_ROW_FAIL, foreground=C_TAG_FAIL)
+        self._tree.tag_configure("changed", background=C_ROW_CHG,  foreground=C_TAG_CHG)
 
         # 双击打开文件
         self._tree.bind("<Double-1>", self._on_tree_dclick)
@@ -798,12 +995,12 @@ class BackupGUI(tk.Tk):
         toolbar = tk.Frame(parent, bg=C_BG)
         toolbar.pack(fill=tk.X, padx=8, pady=4)
         tk.Button(toolbar, text="清空日志", font=FONT_BODY,
-                  bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
+                  bg=C_HEAD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=4, cursor="hand2",
                   command=self._clear_log
                   ).pack(side=tk.RIGHT, padx=4)
         tk.Button(toolbar, text="保存日志", font=FONT_BODY,
-                  bg=C_CARD, fg=C_TEXT, relief=tk.FLAT, bd=0,
+                  bg=C_HEAD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=4, cursor="hand2",
                   command=self._save_log
                   ).pack(side=tk.RIGHT, padx=4)
@@ -833,7 +1030,7 @@ class BackupGUI(tk.Tk):
                  font=FONT_SMALL, bg=C_BG, fg=C_TEXT2
                  ).pack(side=tk.LEFT)
         tk.Button(toolbar, text="💾 保存清单修改", font=FONT_SMALL,
-                  bg="#475569", fg="white", relief=tk.FLAT, bd=0,
+                  bg=C_HEAD, fg=C_TEXT, relief=tk.FLAT, bd=0,
                   padx=8, pady=4, cursor="hand2",
                   command=self._save_dirty_devices
                   ).pack(side=tk.RIGHT)
@@ -844,7 +1041,7 @@ class BackupGUI(tk.Tk):
                          foreground=C_TEXT, rowheight=22,
                          borderwidth=0, relief=tk.FLAT)
         style.configure("Dev.Treeview.Heading",
-                         background=C_SIDEBAR, foreground=C_TEXT,
+                         background=C_HEAD, foreground=C_TEXT,
                          font=FONT_HEAD, relief=tk.FLAT)
         style.map("Dev.Treeview",
                   background=[("selected", C_ACCENT)])
@@ -937,6 +1134,7 @@ class BackupGUI(tk.Tk):
         bar = tk.Frame(self, bg=C_SIDEBAR, height=26)
         bar.pack(fill=tk.X, side=tk.BOTTOM)
         bar.pack_propagate(False)
+        tk.Frame(self, bg=C_BORDER, height=1).pack(fill=tk.X, side=tk.BOTTOM)
         self._lbl_status = tk.Label(
             bar, text="  就绪", font=FONT_SMALL,
             bg=C_SIDEBAR, fg=C_TEXT2, anchor=tk.W
@@ -959,8 +1157,8 @@ class BackupGUI(tk.Tk):
         if running:
             self._btn_start.config(
                 state=tk.DISABLED,
-                bg="#4b5563",       # 灰色
-                fg="#9ca3af",
+                bg=C_DISABLED_BG,       # 灰色
+                fg=C_DISABLED_FG,
                 cursor=""
             )
             self._btn_stop.config(
@@ -978,8 +1176,8 @@ class BackupGUI(tk.Tk):
             )
             self._btn_stop.config(
                 state=tk.DISABLED,
-                bg="#4b5563",       # 灰色
-                fg="#9ca3af",
+                bg=C_DISABLED_BG,       # 灰色
+                fg=C_DISABLED_FG,
                 cursor=""
             )
 
@@ -1281,8 +1479,8 @@ class BackupGUI(tk.Tk):
         self._running   = True
         self._stop_flag = False
         self._set_btn_state(running=True)
-        self._btn_single.config(state=tk.DISABLED, bg="#4b5563",
-                                fg="#9ca3af", cursor="")
+        self._btn_single.config(state=tk.DISABLED, bg=C_DISABLED_BG,
+                                fg=C_DISABLED_FG, cursor="")
         self._v_progress.set(0)
         self._lbl_progress.config(text="准备中...")
         self._nb.select(self._tab_log)
@@ -1366,8 +1564,8 @@ class BackupGUI(tk.Tk):
             self._run_log_path = None
 
         self._single_running = True
-        self._btn_single.config(state=tk.DISABLED, bg="#4b5563",
-                                fg="#9ca3af", cursor="")
+        self._btn_single.config(state=tk.DISABLED, bg=C_DISABLED_BG,
+                                fg=C_DISABLED_FG, cursor="")
         self._v_single_result.set(f"正在备份 {ip}:{port} ...")
         self._log(f"{'='*52}", "head")
         self._log(f"  单台备份启动  {ip}:{port}  "
@@ -1393,7 +1591,7 @@ class BackupGUI(tk.Tk):
         self._stop_flag = True
         self._log("[停止] 已发送停止信号，等待当前任务完成...", "warn")
         # 终止按钮立即禁用（防止重复点击），开始按钮等任务真正结束后再恢复
-        self._btn_stop.config(state=tk.DISABLED, bg="#4b5563", fg="#9ca3af", cursor="")
+        self._btn_stop.config(state=tk.DISABLED, bg=C_DISABLED_BG, fg=C_DISABLED_FG, cursor="")
 
     def _backup_worker(self, devices, bkdir, conc, keep_count, retry_auth,
                        inv_path="", sheet=None):
@@ -1641,8 +1839,8 @@ class BackupGUI(tk.Tk):
     def _set_status(self, msg: str):
         self._lbl_status.config(text=f"  {msg}")
 
-    def _apply_result(self, r, log=True):
-        """把一条结果写入结果表格、概览列表和统计卡片"""
+    def _insert_result_row(self, r):
+        """把一条结果写入结果表格与概览列表（不改动统计与日志）"""
         status_ok = "success" in r["status"]
         status_txt = "✓ 成功" if status_ok else "✗ 失败"
         chg_txt = "⚠ 变更" if r.get("changed") else ("✓ 无变更" if status_ok else "-")
@@ -1661,6 +1859,16 @@ class BackupGUI(tk.Tk):
             r.get("error", "")
         ), tags=(tag,))
 
+        self._overview_list.insert(
+            0,
+            f"{'✓' if status_ok else '✗'}  {r['ip']:<18} {status_txt}  {chg_txt}"
+        )
+        return status_ok
+
+    def _apply_result(self, r, log=True):
+        """把一条结果写入结果表格、概览列表和统计卡片"""
+        status_ok = self._insert_result_row(r)
+
         if log:
             if status_ok:
                 chg = (f" [{r.get('diff_lines', 0)} 行变更]"
@@ -1671,10 +1879,6 @@ class BackupGUI(tk.Tk):
                 self._log(f"  ✗ {r['ip']}  {r.get('error', '')}", "fail")
 
         self._results.append(r)
-        self._overview_list.insert(
-            0,
-            f"{'✓' if status_ok else '✗'}  {r['ip']:<18} {status_txt}  {chg_txt}"
-        )
         self._refresh_cards()
 
     def _refresh_cards(self):
